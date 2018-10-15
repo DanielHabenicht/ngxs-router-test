@@ -1,6 +1,6 @@
 import { State, Action, StateContext, Selector, Store, Actions, ofActionSuccessful } from '@ngxs/store';
 import { Navigate, RouterNavigation, RouterState } from '@ngxs/router-plugin';
-import { ActivatedRouteSnapshot } from '@angular/router';
+import { ActivatedRouteSnapshot, ActivatedRoute } from '@angular/router';
 import { SearchFilter } from 'src/app/models/SearchFilter';
 
 export class AddSearchFilter {
@@ -38,10 +38,17 @@ export interface SearchStateModel {
   }
 })
 export class SearchState {
-  constructor(private store: Store, private actions$: Actions) {
+  constructor(private store: Store, private actions$: Actions, private route: ActivatedRoute) {
     this.actions$.pipe(ofActionSuccessful(RouterNavigation)).subscribe(routeInfo => {
       const routeSnapshot: ActivatedRouteSnapshot = routeInfo.routerState.root;
       const pathSegment = routeSnapshot.firstChild;
+      if (
+        routeSnapshot.firstChild == null ||
+        routeSnapshot.firstChild.url.length === 0 ||
+        routeSnapshot.firstChild.url[0].path !== 'search'
+      ) {
+        return;
+      }
       if (pathSegment != null) {
         // Get SearchFilters
         let searchFilter: SearchFilter[] = [];
@@ -68,6 +75,9 @@ export class SearchState {
   @Action(AddSearchFilter)
   public addSearchFilter(ctx: StateContext<SearchStateModel>, action: AddSearchFilter) {
     const state = ctx.getState();
+    if (state.searchFilters.findIndex(filter => filter.filterColumn === action.searchFilter.filterColumn) >= 0) {
+      return;
+    }
     state.searchFilters.push(action.searchFilter);
     ctx.setState({ ...state });
     return ctx.dispatch(new UpdateUrl({ searchFilter: state.searchFilters }));
@@ -116,7 +126,7 @@ export class SearchState {
   private updateURL(ctx: StateContext<SearchStateModel>, action: UpdateUrl) {
     const update = action.update;
     const params: { [key: string]: string | null } = {};
-    const routeSnapshot: ActivatedRouteSnapshot = this.store.selectSnapshot(RouterState).state.root;
+    const routeSnapshot: ActivatedRouteSnapshot = this.route.snapshot;
     if (update.searchFilter != null) {
       update.searchFilter.forEach(filter => {
         params[filter.filterColumn] = filter.filterValue;
